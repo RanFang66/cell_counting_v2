@@ -20,8 +20,6 @@ from keras.models import Sequential, Model
 from keras.layers import (
     Input,
     Activation,
-    Merge,
-    merge,
     Dropout,
     Reshape,
     Permute,
@@ -29,6 +27,7 @@ from keras.layers import (
     UpSampling2D,
     Flatten
     )
+from keras.layers.merging import concatenate
 from keras.optimizers import SGD, RMSprop
 from keras.layers.convolutional import (
     Convolution2D)
@@ -36,35 +35,31 @@ from keras.layers.pooling import (
     MaxPooling2D,
     AveragePooling2D
     )
-from keras.layers.normalization import BatchNormalization
+from keras.layers.normalization import batch_normalization
 from keras.regularizers import l2
 
 weight_decay = 1e-5
-K.set_image_dim_ordering('tf')
+K.set_image_data_format('channels_last')
 
-def _conv_bn_relu(nb_filter, row, col, subsample = (1,1)):
+def _conv_bn_relu(nb_filter, row, col, subsample = 1):
     def f(input):
-        conv_a = Convolution2D(nb_filter, row, col, subsample = subsample,
-                               init = 'orthogonal', 
-                               border_mode='same', bias = False)(input)
-        norm_a = BatchNormalization()(conv_a)
+        conv_a = Convolution2D(nb_filter, (row, col),\
+                               padding = 'same', kernel_initializer = 'orthogonal', 
+                                use_bias = False)(input)
+        norm_a = batch_normalization.BatchNormalization()(conv_a)
         act_a = Activation(activation = 'relu')(norm_a)
         return act_a
     return f
     
-def _conv_bn_relu_x2(nb_filter, row, col, subsample = (1,1)):
+def _conv_bn_relu_x2(nb_filter, row, col, subsample = 1):
     def f(input):
-        conv_a = Convolution2D(nb_filter, row, col, subsample = subsample,
-                               init = 'orthogonal', border_mode = 'same',bias = False,
-                               W_regularizer = l2(weight_decay),
-                               b_regularizer = l2(weight_decay))(input)
-        norm_a = BatchNormalization()(conv_a)
+        conv_a = Convolution2D(nb_filter, (row, col), \
+                               kernel_initializer =  'orthogonal', padding = 'same', use_bias = False)(input)
+        norm_a = batch_normalization.BatchNormalization()(conv_a)
         act_a = Activation(activation = 'relu')(norm_a)
-        conv_b = Convolution2D(nb_filter, row, col, subsample = subsample,
-                               init = 'orthogonal', border_mode = 'same',bias = False,
-                               W_regularizer = l2(weight_decay),
-                               b_regularizer = l2(weight_decay))(act_a)
-        norm_b = BatchNormalization()(conv_b)
+        conv_b = Convolution2D(nb_filter, (row, col), \
+                               kernel_initializer = 'orthogonal', padding = 'same', use_bias = False)(act_a)
+        norm_b = batch_normalization.BatchNormalization()(conv_b)
         act_b = Activation(activation = 'relu')(norm_b)
         return act_b
     return f
@@ -124,13 +119,13 @@ def U_net_base(input, nb_filter = 64):
     pool3 = MaxPooling2D(pool_size=(2, 2))(block3)
     # =========================================================================
     block4 = _conv_bn_relu_x2(nb_filter,3,3)(pool3)
-    up4 = merge([UpSampling2D(size=(2, 2))(block4), block3], mode='concat', concat_axis=-1)
+    up4 = concatenate([UpSampling2D(size=(2, 2))(block4), block3], axis=-1)
     # =========================================================================
     block5 = _conv_bn_relu_x2(nb_filter,3,3)(up4)
-    up5 = merge([UpSampling2D(size=(2, 2))(block5), block2], mode='concat', concat_axis=-1)
+    up5 = concatenate([UpSampling2D(size=(2, 2))(block5), block2], axis=-1)
     # =========================================================================
     block6 = _conv_bn_relu_x2(nb_filter,3,3)(up5)
-    up6 = merge([UpSampling2D(size=(2, 2))(block6), block1], mode='concat', concat_axis=-1)
+    up6 = concatenate([UpSampling2D(size=(2, 2))(block6), block1], axis=-1)
     # =========================================================================
     block7 = _conv_bn_relu(nb_filter,3,3)(up6)
     return block7
@@ -140,8 +135,8 @@ def buildModel_FCRN_A (input_dim):
     # =========================================================================
     act_ = FCRN_A_base (input_)
     # =========================================================================
-    density_pred =  Convolution2D(1, 1, 1, bias = False, activation='linear',\
-                                  init='orthogonal',name='pred',border_mode='same')(act_)
+    density_pred =  Convolution2D(1, (1, 1), use_bias = False, activation='linear',\
+                                  padding = 'same', kernel_initializer='orthogonal',name='pred')(act_)
     # =========================================================================
     model = Model (input = input_, output = density_pred)
     opt = SGD(lr = 1e-2, momentum = 0.9, nesterov = True)
@@ -153,8 +148,8 @@ def buildModel_FCRN_A_v2 (input_dim):
     # =========================================================================
     act_ = FCRN_A_base_v2 (input_)
     # =========================================================================
-    density_pred =  Convolution2D(1, 1, 1, bias = False, activation='linear',\
-                                  init='orthogonal',name='pred',border_mode='same')(act_)
+    density_pred =  Convolution2D(1, (1, 1), use_bias = False, activation='linear',\
+                                  padding = 'same', kernel_initializer='orthogonal',name='pred')(act_)
     # =========================================================================
     model = Model (input = input_, output = density_pred)
     opt = SGD(lr = 1e-2, momentum = 0.9, nesterov = True)
@@ -166,10 +161,10 @@ def buildModel_U_net (input_dim):
     # =========================================================================
     act_ = U_net_base (input_, nb_filter = 64 )
     # =========================================================================
-    density_pred =  Convolution2D(1, 1, 1, bias = False, activation='linear',\
-                                  init='orthogonal',name='pred',border_mode='same')(act_)
+    density_pred =  Convolution2D(1, (1, 1), use_bias = False, activation='linear',\
+                                  padding = 'same', kernel_initializer='orthogonal',name='pred')(act_)
     # =========================================================================
-    model = Model (input = input_, output = density_pred)
+    model = Model (inputs = input_, outputs = density_pred)
     opt = RMSprop(1e-3)
     model.compile(optimizer = opt, loss = 'mse')
     return model

@@ -17,6 +17,7 @@ from keras import backend as K
 from keras.callbacks import ModelCheckpoint,Callback,LearningRateScheduler
 from scipy import misc
 import scipy.ndimage as ndimage
+import imageio.v2 as imageio
 
 class LossHistory(Callback):
     def on_train_begin(self, logs={}):
@@ -25,7 +26,7 @@ class LossHistory(Callback):
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
 
-base_path = 'cells/'
+base_path = 'D:/cellCounterProgram/cells/'
 data = []
 anno = []
 
@@ -46,10 +47,10 @@ def read_data(base_path):
     imList = os.listdir(base_path)
     for i in range(len(imList)): 
         if 'cell' in imList[i]:
-            img1 = misc.imread(os.path.join(base_path,imList[i]))
+            img1 = imageio.imread(os.path.join(base_path,imList[i]))
             data.append(img1)
             
-            img2_ = misc.imread(os.path.join(base_path, imList[i][:3] + 'dots.png'))
+            img2_ = imageio.imread(os.path.join(base_path, imList[i][:3] + 'dots.png'))
             img2 = 100.0 * (img2_[:,:,0] > 0)
             img2 = ndimage.gaussian_filter(img2, sigma=(1, 1), order=0)
             anno.append(img2)
@@ -102,8 +103,8 @@ def train_(base_path):
                                      train_anno,
                                      batch_size = 16
                                      ),
-                        samples_per_epoch = train_data.shape[0],
-                        nb_epoch = 192,
+                        steps_per_epoch = train_data.shape[0],
+                        epochs = 192,
                         callbacks = [model_checkpoint, change_lr],
                        )
     
